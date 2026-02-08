@@ -4,7 +4,7 @@ A fully connected deep neural network implemented entirely in NumPy — no PyTor
 
 ## What this is
 
-A modular multi-layer perceptron trained on 15,000 images from the [microsoft/cats_vs_dogs](https://huggingface.co/datasets/microsoft/cats_vs_dogs) dataset. The network takes a flattened 64×64 RGB image (12,288 features) and outputs a binary prediction: cat (0) or dog (1).
+A modular multi-layer perceptron trained on 15,000 images (can add more) from the [microsoft/cats_vs_dogs](https://huggingface.co/datasets/microsoft/cats_vs_dogs) dataset. The network takes a flattened 64×64 RGB image (12,288 features) and outputs a binary prediction: cat (0) or dog (1).
 
 ## Architecture
 
