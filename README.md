@@ -1,12 +1,16 @@
-# MLP From Scratch — Cats vs Dogs Binary Classification
+# MLP From Scratch & PyTorch — Cats vs Dogs Binary Classification
 
-A fully connected deep neural network implemented entirely in NumPy — no PyTorch, no TensorFlow, no autograd. Every component (forward pass, backpropagation, weight updates) is written by hand to understand what's actually happening under the hood.
+A fully connected deep neural network implemented **twice**: first entirely in NumPy (no autograd), then translated to PyTorch. Every component of the from-scratch version (forward pass, backpropagation, weight updates) is written by hand to understand what's actually happening under the hood.
 
 ## What this is
 
-A modular multi-layer perceptron trained on 15,000 images (can add more) from the [microsoft/cats_vs_dogs](https://huggingface.co/datasets/microsoft/cats_vs_dogs) dataset. The network takes a flattened 64×64 RGB image (12,288 features) and outputs a binary prediction: cat (0) or dog (1).
+A modular multi-layer perceptron trained on 15,000 images from the [microsoft/cats_vs_dogs](https://huggingface.co/datasets/microsoft/cats_vs_dogs) dataset. The network takes a flattened 64×64 RGB image (12,288 features) and outputs a binary prediction: cat (0) or dog (1).
 
-## Architecture
+---
+
+## Part 1: NumPy From Scratch
+
+### Architecture
 
 The network is fully configurable at instantiation — number of layers, neurons per layer, learning rate, and activation function per layer are all parameters:
 
@@ -23,7 +27,7 @@ model = NN(
 Input (12,288) → Dense(10, ReLU) → Dense(9, ReLU) → Dense(1, Sigmoid) → BCE Loss
 ```
 
-## What's implemented from scratch
+### What's implemented from scratch
 
 - **Data preprocessing**: HuggingFace loading, RGB conversion (handles grayscale/RGBA edge cases), resize to 64×64, normalization to [0,1], flattening
 - **He initialization**: weights scaled by √(2/n_in) to prevent vanishing/exploding gradients in ReLU networks
@@ -37,7 +41,7 @@ Input (12,288) → Dense(10, ReLU) → Dense(9, ReLU) → Dense(1, Sigmoid) → 
 - **Gradient descent**: vanilla SGD weight updates
 - **Dead neuron monitoring**: tracks percentage of ReLU neurons outputting zero per layer
 
-## Activation functions
+### Activation functions
 
 Implemented as plug-and-play dictionaries with forward and derivative:
 
@@ -46,7 +50,7 @@ Implemented as plug-and-play dictionaries with forward and derivative:
 | Sigmoid | 1/(1+e^(-z)) | a(1-a) |
 | ReLU | max(0, z) | 1 if z > 0, else 0 |
 
-## Key dimensions (convention: neurons × examples)
+### Key dimensions (convention: neurons × examples)
 
 | Tensor | Shape |
 |--------|-------|
@@ -56,21 +60,7 @@ Implemented as plug-and-play dictionaries with forward and derivative:
 | b[l] | (n_l, 1) — broadcast across m examples |
 | Z[l], A[l] | (n_l, m) |
 
-## Bugs I found and fixed along the way
-
-This project was a debugging exercise as much as an implementation one. Major issues encountered:
-
-1. **dtype=object contamination** — using `np.empty(L, dtype=object)` for storing arrays caused `np.exp` to fail silently. Fixed by using Python lists.
-2. **Element-wise vs matrix multiply confusion** — `dZ = dA * activation'(A)` is element-wise (`*`), not `np.dot`. Took a while to internalize when to use which.
-3. **Broadcasting shape mismatch** — Y as shape `(15000,)` with A as `(1, 15000)` caused NumPy to broadcast into a `(15000, 15000)` matrix in the loss computation, inflating the cost to ~8.0 instead of ~0.693. Fixed with `Y.reshape(1, -1)`.
-4. **Double 1/m normalization** — dividing by m in both dA and dW effectively divided gradients by m² = 225,000,000. Gradients were microscopic and the network barely learned.
-5. **Dying ReLU in deep networks** — original 9-layer architecture had cascading dead neurons. Reduced to 3 layers to get gradient flow working.
-
-## How to run
-
-```bash
-pip install datasets pillow numpy matplotlib
-```
+### How to run (NumPy version)
 
 ```python
 # Load and preprocess
@@ -87,19 +77,135 @@ for i in range(100):
     model.forward_pass(X, Y)
     model.backward_pass(X, Y)
 ```
-## Result I got with L = 3, corresponding hidden layers size = [10,9,1], m = 15,000, iterations = 40, learning rate = .001, activation functions = [Relu, Relu, logistic regression] 
+
+### Result (NumPy)
+L = 3, hidden layers = [10, 9, 1], m = 15,000, iterations = 100, lr = 0.001
+
 <img width="567" height="435" alt="image" src="https://github.com/user-attachments/assets/5a5a6495-001b-4e39-a348-63017f8420be" />
 
+---
+
+## Part 2: PyTorch Translation
+
+### Architecture
+
+Same network, but using PyTorch's `nn.Sequential`:
+
+```python
+model = nn.Sequential(
+    nn.Linear(12288, 10),
+    nn.ReLU(),
+    nn.Linear(10, 9),
+    nn.ReLU(),
+    nn.Linear(9, 1),
+    nn.Sigmoid()
+)
+```
+
+### Key differences from NumPy version
+
+| Aspect | NumPy (from scratch) | PyTorch |
+|--------|---------------------|---------|
+| Gradient computation | Manual backprop formulas | `loss.backward()` (autograd) |
+| Weight updates | `W -= lr * dW` | `optimizer.step()` |
+| Memory management | Manual | Computation graph stored automatically |
+| Data convention | (features, examples) | (examples, features) |
+
+### How to run (PyTorch version)
+
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from datasets import load_dataset
+import numpy as np
+
+# Load and preprocess
+ds = load_dataset("microsoft/cats_vs_dogs", split="train")
+
+def preprocessing(example):
+    size = (64, 64)
+    img = example['image'].convert('RGB')
+    img_resized = img.resize(size)
+    img_processed = np.array(img_resized, dtype=np.float32) / 255
+    example['image'] = img_processed.flatten()
+    return example
+
+images = ds.map(preprocessing, num_proc=4)['image']
+labels = ds['labels']
+
+# Prepare tensors
+m = 15000
+vector_images = np.array(images[:m]).squeeze()
+tensor_images = torch.tensor(vector_images, dtype=torch.float32)
+tensor_labels = torch.tensor(labels[:m], dtype=torch.float32).unsqueeze(1)  # Shape: (m, 1)
+
+# Define model
+model = nn.Sequential(
+    nn.Linear(12288, 10),
+    nn.ReLU(),
+    nn.Linear(10, 9),
+    nn.ReLU(),
+    nn.Linear(9, 1),
+    nn.Sigmoid()
+)
+
+loss_function = nn.MSELoss()
+optimizer = optim.SGD(model.parameters(), lr=0.001)
+
+# Training loop
+loss_evolution = []
+for epoch in range(100):
+    optimizer.zero_grad()
+    outputs = model(tensor_images)
+    loss = loss_function(outputs, tensor_labels)
+    loss.backward()
+    optimizer.step()
+    loss_evolution.append(loss.item())  # .item() to avoid memory leak
+```
+
+### Critical lesson learned: `loss.item()`
+
+When tracking loss history, **never** do:
+```python
+loss_evolution.append(loss)  # BAD: stores tensor + entire computation graph
+```
+
+Always extract the scalar value:
+```python
+loss_evolution.append(loss.item())  # GOOD: stores just the float
+```
+
+Without `.item()`, each iteration stores the full computation graph in memory. After 100 epochs on 15,000 images, this crashes the kernel (and sometimes the whole machine).
+
+---
+
+## Bugs I found and fixed along the way
+
+### NumPy version
+1. **dtype=object contamination** — using `np.empty(L, dtype=object)` caused `np.exp` to fail silently
+2. **Element-wise vs matrix multiply confusion** — `dZ = dA * activation'(A)` is element-wise (`*`), not `np.dot`
+3. **Broadcasting shape mismatch** — Y as `(15000,)` with A as `(1, 15000)` broadcast into `(15000, 15000)`, inflating cost
+4. **Double 1/m normalization** — divided by m² = 225,000,000 instead of m
+5. **Dying ReLU** — 9-layer architecture had cascading dead neurons
+
+### PyTorch version
+1. **Shape mismatch warning** — output `(m, 1)` vs labels `(m,)` causes broadcasting issues. Fix: `tensor_labels.unsqueeze(1)`
+2. **Memory leak from storing tensors** — appending `loss` instead of `loss.item()` crashed the kernel
+3. **Confusing nn.ReLU syntax** — `nn.ReLU(12288, 10)` is wrong; need `nn.Linear(12288, 10)` then `nn.ReLU()`
+
+---
 
 ## What's next
 
 - Train/test split and accuracy metrics
-- Learning rate tuning and more iterations
-- Deeper architectures once the base network converges
-- Transition to PyTorch to compare with manual implementation
-- Apply similar architecture to financial time series data
+- Mini-batch training with DataLoaders
+- Learning rate scheduling
+- Deeper architectures with batch normalization
+- Apply to financial time series data (the real goal)
 
+---
 
 ## Stack
 
-Python 3 · NumPy · Pillow · HuggingFace Datasets · Matplotlib
+Python 3 · NumPy · PyTorch · Pillow · HuggingFace Datasets · Matplotlib
