@@ -87,6 +87,9 @@ for i in range(100):
     model.forward_pass(X, Y)
     model.backward_pass(X, Y)
 ```
+## Result I got with L = 3, corresponding hidden layers size = [10,9,1], m = 15,000, iterations = 40, learning rate = .001, activation functions = [Relu, Relu, logistic regression] 
+<img width="567" height="435" alt="image" src="https://github.com/user-attachments/assets/5a5a6495-001b-4e39-a348-63017f8420be" />
+
 
 ## What's next
 
@@ -95,6 +98,7 @@ for i in range(100):
 - Deeper architectures once the base network converges
 - Transition to PyTorch to compare with manual implementation
 - Apply similar architecture to financial time series data
+
 
 ## Stack
 
