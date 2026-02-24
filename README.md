@@ -194,6 +194,11 @@ Without `.item()`, each iteration stores the full computation graph in memory. A
 2. **Memory leak from storing tensors** — appending `loss` instead of `loss.item()` crashed the kernel
 3. **Confusing nn.ReLU syntax** — `nn.ReLU(12288, 10)` is wrong; need `nn.Linear(12288, 10)` then `nn.ReLU()`
 
+### Result (PyTorch)
+L = 3, hidden layers = [10, 9, 1], m = 15,000, iterations = 100, lr = 0.001
+<img width="565" height="413" alt="image" src="https://github.com/user-attachments/assets/3baa4cf3-3ccb-44fa-9be6-ff4b43f4532f" />
+
+
 ---
 
 ## What's next
